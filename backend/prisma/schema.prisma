@@ -1432,6 +1432,26 @@ model StockTransfer {
 }
 
 // ============================================================
+// M25 — Customer Device Tokens (White-Label App Push)
+// ============================================================
+
+model CustomerDeviceToken {
+  id           String   @id @default(uuid())
+  customerId   String
+  restaurantId String
+  tenantId     String
+  token        String   @unique
+  platform     String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([restaurantId])
+  @@map("customer_device_tokens")
+}
+
+// ============================================================
 // M23 — Device Tokens for Push Notifications
 // ============================================================
 

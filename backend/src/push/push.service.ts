@@ -75,6 +75,64 @@ export class PushService {
     this.logger.log(`Push sent to ${validTokens.length} device(s): ${title}`);
   }
 
+  // ── M25.3 Register/deregister customer device token ──────────────────────────
+
+  async registerCustomerToken(
+    customerId: string,
+    restaurantId: string,
+    tenantId: string,
+    token: string,
+    platform: string,
+  ) {
+    await this.prisma.customerDeviceToken.upsert({
+      where: { token },
+      update: { customerId, restaurantId, tenantId, platform, isActive: true },
+      create: { customerId, restaurantId, tenantId, token, platform },
+    });
+    return { registered: true };
+  }
+
+  async deregisterCustomerToken(customerId: string, token: string) {
+    await this.prisma.customerDeviceToken.updateMany({
+      where: { customerId, token },
+      data: { isActive: false },
+    });
+    return { deregistered: true };
+  }
+
+  // ── M25.3 Send push to customer devices ──────────────────────────────────────
+
+  async sendPushToCustomer(
+    customerId: string,
+    title: string,
+    body: string,
+    data?: Record<string, any>,
+  ): Promise<void> {
+    const tokens = await this.prisma.customerDeviceToken.findMany({
+      where: { customerId, isActive: true },
+      select: { token: true },
+    });
+
+    const validTokens = tokens
+      .map((t) => t.token)
+      .filter((t) => t.startsWith('ExponentPushToken['));
+
+    if (validTokens.length === 0) return;
+
+    const messages = validTokens.map((token) => ({
+      to: token,
+      title,
+      body,
+      data: data ?? {},
+      sound: 'default',
+      priority: 'high',
+    }));
+
+    await this.httpPost(this.EXPO_PUSH_URL, messages).catch((err) => {
+      this.logger.warn(`Customer push failed: ${err.message}`);
+    });
+  }
+
   private httpPost(url: string, body: unknown): Promise<void> {
     return new Promise((resolve, reject) => {
       const payload = JSON.stringify(body);
