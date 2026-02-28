@@ -1385,6 +1385,53 @@ model LeaveRequest {
 }
 
 // ============================================================
+// M24 — Multi-Location Management
+// ============================================================
+
+enum TransferStatus {
+  PENDING
+  RECEIVED
+  CANCELLED
+}
+
+model MenuPriceOverride {
+  id           String   @id @default(uuid())
+  tenantId     String
+  restaurantId String
+  itemId       String
+  price        Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([restaurantId, itemId])
+  @@index([tenantId])
+  @@index([restaurantId])
+  @@index([itemId])
+  @@map("menu_price_overrides")
+}
+
+model StockTransfer {
+  id               String         @id @default(uuid())
+  tenantId         String
+  fromRestaurantId String
+  toRestaurantId   String
+  ingredientId     String
+  quantity         Float
+  notes            String?
+  status           TransferStatus @default(PENDING)
+  initiatedBy      String
+  receivedBy       String?
+  receivedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([tenantId])
+  @@index([fromRestaurantId])
+  @@index([toRestaurantId])
+  @@map("stock_transfers")
+}
+
+// ============================================================
 // M23 — Device Tokens for Push Notifications
 // ============================================================
 

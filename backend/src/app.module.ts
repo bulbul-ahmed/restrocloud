@@ -27,6 +27,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { CrmModule } from './crm/crm.module';
 import { HrModule } from './hr/hr.module';
 import { PushModule } from './push/push.module';
+import { MultiLocationModule } from './multi-location/multi-location.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { PushModule } from './push/push.module';
     CrmModule,
     HrModule,
     PushModule,
+    MultiLocationModule,
   ],
 })
 export class AppModule {}

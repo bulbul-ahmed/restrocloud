@@ -22,6 +22,7 @@ const InventoryPage       = lazy(() => import('@/pages/inventory/InventoryPage')
 const CRMPage             = lazy(() => import('@/pages/crm/CRMPage'))
 const CustomersPage       = lazy(() => import('@/pages/customers/CustomersPage'))
 const StaffPage           = lazy(() => import('@/pages/staff/StaffPage'))
+const MultiLocationPage   = lazy(() => import('@/pages/multi-location/MultiLocationPage'))
 
 function Loading() {
   return (
@@ -118,6 +119,8 @@ export const router = createBrowserRouter([
 
       // M22 — Staff & HR
       { path: 'staff',           element: <Page component={StaffPage} /> },
+      // M24 — Multi-Location
+      { path: 'multi-location',  element: <Page component={MultiLocationPage} /> },
 
       // M2/M9 — Settings
       { path: 'settings',        element: <Page component={ComingSoonPage} /> },

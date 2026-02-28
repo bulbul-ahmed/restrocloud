@@ -17,6 +17,7 @@ import {
   Truck,
   Package,
   Heart,
+  Building2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/ui.store'
@@ -74,6 +75,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Admin',
     items: [
+      { label: 'Multi-Location', href: '/multi-location', icon: Building2 },
       { label: 'Customers', href: '/customers', icon: Users },
       { label: 'CRM & Loyalty', href: '/crm', icon: Heart },
       { label: 'Staff', href: '/staff', icon: Users },
