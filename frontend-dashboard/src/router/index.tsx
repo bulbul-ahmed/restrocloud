@@ -21,6 +21,7 @@ const ReportsPage         = lazy(() => import('@/pages/reports/ReportsPage'))
 const InventoryPage       = lazy(() => import('@/pages/inventory/InventoryPage'))
 const CRMPage             = lazy(() => import('@/pages/crm/CRMPage'))
 const CustomersPage       = lazy(() => import('@/pages/customers/CustomersPage'))
+const StaffPage           = lazy(() => import('@/pages/staff/StaffPage'))
 
 function Loading() {
   return (
@@ -115,8 +116,8 @@ export const router = createBrowserRouter([
       // M19 — Reports
       { path: 'reports',         element: <Page component={ReportsPage} /> },
 
-      // M1/M9 — Staff
-      { path: 'staff',           element: <Page component={ComingSoonPage} /> },
+      // M22 — Staff & HR
+      { path: 'staff',           element: <Page component={StaffPage} /> },
 
       // M2/M9 — Settings
       { path: 'settings',        element: <Page component={ComingSoonPage} /> },
