@@ -26,6 +26,7 @@ import { DeliveryModule } from './delivery/delivery.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { CrmModule } from './crm/crm.module';
 import { HrModule } from './hr/hr.module';
+import { PushModule } from './push/push.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { HrModule } from './hr/hr.module';
     InventoryModule,
     CrmModule,
     HrModule,
+    PushModule,
   ],
 })
 export class AppModule {}

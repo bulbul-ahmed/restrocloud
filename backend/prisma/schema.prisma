@@ -1383,3 +1383,22 @@ model LeaveRequest {
   @@index([status])
   @@map("leave_requests")
 }
+
+// ============================================================
+// M23 — Device Tokens for Push Notifications
+// ============================================================
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String
+  token     String   @unique
+  platform  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("device_tokens")
+}
