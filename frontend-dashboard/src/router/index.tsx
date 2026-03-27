@@ -13,6 +13,7 @@ const DashboardPage       = lazy(() => import('@/pages/DashboardPage'))
 const ComingSoonPage      = lazy(() => import('@/pages/ComingSoonPage'))
 const CategoriesPage      = lazy(() => import('@/pages/menu/CategoriesPage'))
 const ItemsPage           = lazy(() => import('@/pages/menu/ItemsPage'))
+const ItemDetailPage      = lazy(() => import('@/pages/menu/ItemDetailPage'))
 const POSPage             = lazy(() => import('@/pages/pos/POSPage'))
 const KDSPage             = lazy(() => import('@/pages/kds/KDSPage'))
 const OrdersPage          = lazy(() => import('@/pages/orders/OrdersPage'))
@@ -21,8 +22,14 @@ const ReportsPage         = lazy(() => import('@/pages/reports/ReportsPage'))
 const InventoryPage       = lazy(() => import('@/pages/inventory/InventoryPage'))
 const CRMPage             = lazy(() => import('@/pages/crm/CRMPage'))
 const CustomersPage       = lazy(() => import('@/pages/customers/CustomersPage'))
+const TablesPage          = lazy(() => import('@/pages/tables/TablesPage'))
+const PaymentsPage        = lazy(() => import('@/pages/payments/PaymentsPage'))
 const StaffPage           = lazy(() => import('@/pages/staff/StaffPage'))
 const MultiLocationPage   = lazy(() => import('@/pages/multi-location/MultiLocationPage'))
+const SettingsPage        = lazy(() => import('@/pages/settings/SettingsPage'))
+const BillingPage         = lazy(() => import('@/pages/billing/BillingPage'))
+const OnboardingPage         = lazy(() => import('@/pages/onboarding/OnboardingPage'))
+const CustomerDisplayPage    = lazy(() => import('@/pages/display/CustomerDisplayPage'))
 
 function Loading() {
   return (
@@ -47,6 +54,18 @@ function Page({ component: Component }: { component: React.LazyExoticComponent<(
 }
 
 export const router = createBrowserRouter([
+  // ─── Onboarding (protected but outside AppLayout shell) ───────────────────
+  {
+    path: '/onboarding',
+    element: <Page component={OnboardingPage} />,
+  },
+
+  // ─── Public display screen (no auth) ──────────────────────────────────────
+  {
+    path: '/display/:restaurantId',
+    element: <Page component={CustomerDisplayPage} />,
+  },
+
   // ─── Public / Auth routes ──────────────────────────────────────────────────
   {
     path: '/login',
@@ -82,9 +101,10 @@ export const router = createBrowserRouter([
       { path: 'dashboard', element: <Page component={DashboardPage} /> },
 
       // M3 — Menu
-      { path: 'menu',            element: <Page component={CategoriesPage} /> },
-      { path: 'menu/categories', element: <Page component={CategoriesPage} /> },
-      { path: 'menu/items',      element: <Page component={ItemsPage} /> },
+      { path: 'menu',                   element: <Page component={CategoriesPage} /> },
+      { path: 'menu/categories',        element: <Page component={CategoriesPage} /> },
+      { path: 'menu/items',             element: <Page component={ItemsPage} /> },
+      { path: 'menu/items/:itemId',     element: <Page component={ItemDetailPage} /> },
 
       // M5 — POS
       { path: 'pos',             element: <Page component={POSPage} /> },
@@ -93,7 +113,7 @@ export const router = createBrowserRouter([
       { path: 'kds',             element: <Page component={KDSPage} /> },
 
       // M7 — Tables
-      { path: 'tables',          element: <Page component={ComingSoonPage} /> },
+      { path: 'tables',          element: <Page component={TablesPage} /> },
 
       // M4/M16 — Orders
       { path: 'orders',          element: <Page component={OrdersPage} /> },
@@ -111,8 +131,8 @@ export const router = createBrowserRouter([
       // M21 — CRM & Loyalty
       { path: 'crm',             element: <Page component={CRMPage} /> },
 
-      // M8 — Payments
-      { path: 'payments',        element: <Page component={ComingSoonPage} /> },
+      // M7 — Payments
+      { path: 'payments',        element: <Page component={PaymentsPage} /> },
 
       // M19 — Reports
       { path: 'reports',         element: <Page component={ReportsPage} /> },
@@ -122,9 +142,12 @@ export const router = createBrowserRouter([
       // M24 — Multi-Location
       { path: 'multi-location',  element: <Page component={MultiLocationPage} /> },
 
-      // M2/M9 — Settings
-      { path: 'settings',        element: <Page component={ComingSoonPage} /> },
-      { path: 'settings/:section', element: <Page component={ComingSoonPage} /> },
+      // M2 — Settings
+      { path: 'settings',          element: <Page component={SettingsPage} /> },
+      { path: 'settings/:section', element: <Page component={SettingsPage} /> },
+
+      // SaaS Billing
+      { path: 'billing', element: <Page component={BillingPage} /> },
     ],
   },
 

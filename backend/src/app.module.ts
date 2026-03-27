@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
+import { ErrorLogFilter } from './common/filters/error-log.filter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -28,6 +30,8 @@ import { CrmModule } from './crm/crm.module';
 import { HrModule } from './hr/hr.module';
 import { PushModule } from './push/push.module';
 import { MultiLocationModule } from './multi-location/multi-location.module';
+import { BillingModule } from './billing/billing.module';
+import { KbModule } from './kb/kb.module';
 
 @Module({
   imports: [
@@ -88,6 +92,11 @@ import { MultiLocationModule } from './multi-location/multi-location.module';
     HrModule,
     PushModule,
     MultiLocationModule,
+    BillingModule,
+    KbModule,
+  ],
+  providers: [
+    { provide: APP_FILTER, useClass: ErrorLogFilter },
   ],
 })
 export class AppModule {}

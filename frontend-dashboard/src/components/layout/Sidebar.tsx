@@ -26,18 +26,32 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { getInitials } from '@/lib/utils'
 import { api } from '@/lib/api'
+import { disconnectSocket } from '@/lib/socket'
 import { toast } from 'sonner'
+import { useQuery } from '@tanstack/react-query'
+import { settingsApi } from '@/lib/settings.api'
+
+// Roles hierarchy for reference:
+// OWNER > MANAGER > CASHIER / WAITER / KITCHEN / DRIVER / STAFF
+const MANAGER_UP  = ['OWNER', 'MANAGER']
+const CASHIER_UP  = ['OWNER', 'MANAGER', 'CASHIER']
+const ALL_FLOOR   = ['OWNER', 'MANAGER', 'CASHIER', 'WAITER']
+const KDS_ROLES   = ['OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN']
+const ORDERS_VIEW = ['OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN']
+const DELIVERY_ROLES = ['OWNER', 'MANAGER', 'DRIVER']
 
 interface NavItem {
   label: string
   href: string
   icon: React.ElementType
   badge?: string
+  roles?: string[]   // undefined = all authenticated roles
 }
 
 interface NavSection {
   title: string
   items: NavItem[]
+  roles?: string[]   // section-level guard (hides entire section if user has no visible items)
 }
 
 const NAV_SECTIONS: NavSection[] = [
@@ -50,36 +64,37 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Operations',
     items: [
-      { label: 'Point of Sale', href: '/pos', icon: Monitor },
-      { label: 'Kitchen Display', href: '/kds', icon: ChefHat },
-      { label: 'Tables',   href: '/tables',   icon: Grid3X3     },
-      { label: 'Orders',    href: '/orders',    icon: ClipboardList },
-      { label: 'Delivery',  href: '/delivery',  icon: Truck       },
-      { label: 'Inventory', href: '/inventory', icon: Package     },
+      { label: 'Point of Sale',    href: '/pos',       icon: Monitor,       roles: CASHIER_UP },
+      { label: 'Kitchen Display',  href: '/kds',       icon: ChefHat,       roles: KDS_ROLES },
+      { label: 'Tables',           href: '/tables',    icon: Grid3X3,       roles: ALL_FLOOR },
+      { label: 'Orders',           href: '/orders',    icon: ClipboardList, roles: ORDERS_VIEW },
+      { label: 'Delivery',         href: '/delivery',  icon: Truck,         roles: DELIVERY_ROLES },
+      { label: 'Inventory',        href: '/inventory', icon: Package,       roles: MANAGER_UP },
     ],
   },
   {
     title: 'Menu',
     items: [
-      { label: 'Categories', href: '/menu/categories', icon: FolderOpen },
-      { label: 'Items & Modifiers', href: '/menu/items', icon: UtensilsCrossed },
+      { label: 'Categories',        href: '/menu/categories', icon: FolderOpen,       roles: MANAGER_UP },
+      { label: 'Items & Modifiers', href: '/menu/items',      icon: UtensilsCrossed,  roles: MANAGER_UP },
     ],
   },
   {
     title: 'Finance',
     items: [
-      { label: 'Payments', href: '/payments', icon: CreditCard },
-      { label: 'Reports', href: '/reports', icon: BarChart3 },
+      { label: 'Payments', href: '/payments', icon: CreditCard, roles: CASHIER_UP },
+      { label: 'Reports',  href: '/reports',  icon: BarChart3,  roles: MANAGER_UP },
     ],
   },
   {
     title: 'Admin',
     items: [
-      { label: 'Multi-Location', href: '/multi-location', icon: Building2 },
-      { label: 'Customers', href: '/customers', icon: Users },
-      { label: 'CRM & Loyalty', href: '/crm', icon: Heart },
-      { label: 'Staff', href: '/staff', icon: Users },
-      { label: 'Settings', href: '/settings', icon: Settings },
+      { label: 'Multi-Location', href: '/multi-location', icon: Building2, roles: MANAGER_UP },
+      { label: 'Customers',      href: '/customers',      icon: Users,     roles: CASHIER_UP },
+      { label: 'CRM & Loyalty',  href: '/crm',            icon: Heart,     roles: MANAGER_UP },
+      { label: 'Staff',          href: '/staff',          icon: Users,     roles: MANAGER_UP },
+      { label: 'Billing',        href: '/billing',        icon: CreditCard,roles: MANAGER_UP },
+      { label: 'Settings',       href: '/settings',       icon: Settings,  roles: MANAGER_UP },
     ],
   },
 ]
@@ -88,12 +103,21 @@ export function Sidebar() {
   const location = useLocation()
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
   const { user, logout } = useAuthStore()
+  const restaurantId = user?.restaurantId ?? ''
+
+  const { data: restaurantInfo } = useQuery({
+    queryKey: ['sidebar-restaurant', restaurantId],
+    queryFn: () => settingsApi.get(restaurantId),
+    enabled: !!restaurantId,
+    staleTime: 5 * 60 * 1000,
+  })
 
   async function handleLogout() {
     try {
       const { refreshToken } = useAuthStore.getState()
       if (refreshToken) await api.post('/auth/logout', { refreshToken }).catch(() => {})
     } finally {
+      disconnectSocket()
       logout()
     }
     toast.success('Logged out successfully')
@@ -111,13 +135,21 @@ export function Sidebar() {
         'flex items-center h-16 px-4 border-b border-sidebar-border flex-shrink-0',
         sidebarCollapsed ? 'justify-center' : 'gap-3',
       )}>
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand text-white font-bold text-sm flex-shrink-0">
-          R
-        </div>
+        {restaurantInfo?.logoUrl ? (
+          <img
+            src={restaurantInfo.logoUrl}
+            alt={restaurantInfo.name}
+            className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
+          />
+        ) : (
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand text-white font-bold text-sm flex-shrink-0">
+            {(restaurantInfo?.name ?? 'R')[0].toUpperCase()}
+          </div>
+        )}
         {!sidebarCollapsed && (
           <div className="flex flex-col overflow-hidden">
             <span className="text-sidebar-textActive text-sm font-semibold leading-tight truncate">
-              RestroCloud
+              {restaurantInfo?.name ?? 'RestroCloud'}
             </span>
             <span className="text-sidebar-textMuted text-xs truncate">
               {user?.role ?? 'Dashboard'}
@@ -128,14 +160,19 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 sidebar-scroll">
-        {NAV_SECTIONS.map((section) => (
+        {NAV_SECTIONS.map((section) => {
+          const visibleItems = section.items.filter(
+            item => !item.roles || item.roles.includes(user?.role ?? '')
+          )
+          if (visibleItems.length === 0) return null
+          return (
           <div key={section.title} className="mb-4">
             {!sidebarCollapsed && (
               <p className="px-4 mb-1 text-2xs font-semibold uppercase tracking-wider text-sidebar-textMuted">
                 {section.title}
               </p>
             )}
-            {section.items.map((item) => {
+            {visibleItems.map((item) => {
               const Icon = item.icon
               const isActive =
                 item.href === '/dashboard'
@@ -159,7 +196,7 @@ export function Sidebar() {
                     size={18}
                     className={cn(
                       'flex-shrink-0 transition-colors',
-                      isActive ? 'text-brand-400' : 'text-sidebar-text group-hover:text-sidebar-textActive',
+                      isActive ? 'text-brand' : 'text-sidebar-text group-hover:text-sidebar-textActive',
                     )}
                   />
                   {!sidebarCollapsed && (
@@ -174,8 +211,16 @@ export function Sidebar() {
               )
             })}
           </div>
-        ))}
+          )
+        })}
       </nav>
+
+      {/* Powered by */}
+      {!sidebarCollapsed && (
+        <div className="px-4 pb-2 text-center">
+          <p className="text-[10px] text-sidebar-textMuted opacity-40">Powered by RestroCloud</p>
+        </div>
+      )}
 
       {/* User section */}
       <div className="flex-shrink-0 border-t border-sidebar-border">

@@ -18,6 +18,9 @@ import {
   AlertTriangle,
   LogIn,
   LogOut as LogOutIcon,
+  Eye,
+  EyeOff,
+  KeyRound,
 } from 'lucide-react'
 
 import { PageShell } from '@/components/layout/PageShell'
@@ -37,7 +40,8 @@ import {
 
 import { useAuthStore } from '@/store/auth.store'
 import { hrApi } from '@/lib/hr.api'
-import { apiError } from '@/lib/api'
+import { api, apiError } from '@/lib/api'
+import { settingsApi } from '@/lib/settings.api'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import type {
   Employee,
@@ -228,10 +232,372 @@ function EditEmployeeDialog({
   )
 }
 
+// ─── Add Staff Dialog ─────────────────────────────────────────────────────────
+
+const STAFF_ROLES = ['MANAGER', 'CASHIER', 'WAITER', 'KITCHEN', 'DRIVER', 'STAFF'] as const
+
+// Country → dial code map (covers all currencies/timezones in settings)
+const DIAL_CODES: { code: string; dial: string; flag: string; label: string }[] = [
+  { code: 'BD', dial: '+880', flag: '🇧🇩', label: 'Bangladesh' },
+  { code: 'IN', dial: '+91',  flag: '🇮🇳', label: 'India' },
+  { code: 'PK', dial: '+92',  flag: '🇵🇰', label: 'Pakistan' },
+  { code: 'LK', dial: '+94',  flag: '🇱🇰', label: 'Sri Lanka' },
+  { code: 'NP', dial: '+977', flag: '🇳🇵', label: 'Nepal' },
+  { code: 'AE', dial: '+971', flag: '🇦🇪', label: 'UAE' },
+  { code: 'SA', dial: '+966', flag: '🇸🇦', label: 'Saudi Arabia' },
+  { code: 'MY', dial: '+60',  flag: '🇲🇾', label: 'Malaysia' },
+  { code: 'SG', dial: '+65',  flag: '🇸🇬', label: 'Singapore' },
+  { code: 'ID', dial: '+62',  flag: '🇮🇩', label: 'Indonesia' },
+  { code: 'TH', dial: '+66',  flag: '🇹🇭', label: 'Thailand' },
+  { code: 'JP', dial: '+81',  flag: '🇯🇵', label: 'Japan' },
+  { code: 'CN', dial: '+86',  flag: '🇨🇳', label: 'China' },
+  { code: 'KR', dial: '+82',  flag: '🇰🇷', label: 'South Korea' },
+  { code: 'GB', dial: '+44',  flag: '🇬🇧', label: 'UK' },
+  { code: 'FR', dial: '+33',  flag: '🇫🇷', label: 'France' },
+  { code: 'DE', dial: '+49',  flag: '🇩🇪', label: 'Germany' },
+  { code: 'US', dial: '+1',   flag: '🇺🇸', label: 'USA' },
+  { code: 'CA', dial: '+1',   flag: '🇨🇦', label: 'Canada' },
+  { code: 'AU', dial: '+61',  flag: '🇦🇺', label: 'Australia' },
+  { code: 'NG', dial: '+234', flag: '🇳🇬', label: 'Nigeria' },
+  { code: 'KE', dial: '+254', flag: '🇰🇪', label: 'Kenya' },
+  { code: 'EG', dial: '+20',  flag: '🇪🇬', label: 'Egypt' },
+  { code: 'BR', dial: '+55',  flag: '🇧🇷', label: 'Brazil' },
+]
+
+function countryToDial(country: string | null | undefined): string {
+  if (!country) return '+880'
+  const upper = country.toUpperCase().trim()
+  // match by 2-letter code OR by label (e.g. "Bangladesh")
+  const match = DIAL_CODES.find(
+    d => d.code === upper || d.label.toUpperCase() === upper,
+  )
+  return match?.dial ?? '+880'
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function AddStaffDialog({ open, onClose, callerRole }: { open: boolean; onClose: () => void; callerRole: string }) {
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  const restaurantId = user?.restaurantId ?? ''
+
+  // Pull country from already-cached settings (no extra network request)
+  const { data: settings } = useQuery({
+    queryKey: ['settings', restaurantId],
+    queryFn: () => settingsApi.get(restaurantId),
+    enabled: !!restaurantId,
+    staleTime: Infinity,
+  })
+
+  const defaultDial = countryToDial(settings?.country)
+
+  const [form, setForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phoneNumber: '',  // digits only, no dial code
+    dialCode: defaultDial,
+    password: '',
+    role: 'WAITER',
+  })
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [showPassword, setShowPassword] = useState(false)
+
+  // Update dialCode when settings load
+  useState(() => {
+    if (settings?.country) {
+      setForm(f => ({ ...f, dialCode: countryToDial(settings.country) }))
+    }
+  })
+
+  function set(field: string, value: string) {
+    setForm(f => ({ ...f, [field]: value }))
+    setErrors(e => ({ ...e, [field]: '' }))
+  }
+
+  function onPhoneInput(raw: string) {
+    // Strip everything except digits
+    const digits = raw.replace(/\D/g, '')
+    set('phoneNumber', digits)
+  }
+
+  function validate() {
+    const e: Record<string, string> = {}
+    if (!form.firstName.trim()) e.firstName = 'Required'
+    if (!form.lastName.trim()) e.lastName = 'Required'
+    if (!form.password || form.password.length < 6) e.password = 'Minimum 6 characters'
+
+    const hasEmail = form.email.trim().length > 0
+    const hasPhone = form.phoneNumber.trim().length > 0
+
+    if (!hasEmail && !hasPhone) {
+      e.login = 'Provide email or phone — staff need this to log in'
+    } else {
+      if (hasEmail && !EMAIL_RE.test(form.email.trim())) {
+        e.email = 'Invalid email address'
+      }
+      if (hasPhone && form.phoneNumber.length < 6) {
+        e.phone = 'Phone number too short'
+      }
+    }
+    return e
+  }
+
+  const fullPhone = form.phoneNumber ? `${form.dialCode}${form.phoneNumber}` : ''
+
+  const mut = useMutation({
+    mutationFn: () =>
+      api.post('/users/staff', {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        password: form.password,
+        role: form.role,
+        ...(form.email.trim() && { email: form.email.trim() }),
+        ...(fullPhone && { phone: fullPhone }),
+        restaurantId,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['hr-employees', restaurantId] })
+      toast.success(`${form.firstName} ${form.lastName} added as ${form.role}`)
+      setForm({ firstName: '', lastName: '', email: '', phoneNumber: '', dialCode: defaultDial, password: '', role: 'WAITER' })
+      setErrors({})
+      onClose()
+    },
+    onError: (e) => toast.error(apiError(e)),
+  })
+
+  function handleSubmit() {
+    const e = validate()
+    if (Object.keys(e).length) { setErrors(e); return }
+    mut.mutate()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add Staff Member</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+
+          {/* Name */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>First name <span className="text-red-500">*</span></Label>
+              <Input value={form.firstName} onChange={e => set('firstName', e.target.value)} placeholder="John" />
+              {errors.firstName && <p className="text-xs text-red-500">{errors.firstName}</p>}
+            </div>
+            <div className="space-y-1">
+              <Label>Last name <span className="text-red-500">*</span></Label>
+              <Input value={form.lastName} onChange={e => set('lastName', e.target.value)} placeholder="Doe" />
+              {errors.lastName && <p className="text-xs text-red-500">{errors.lastName}</p>}
+            </div>
+          </div>
+
+          {/* Role */}
+          <div className="space-y-1">
+            <Label>Role <span className="text-red-500">*</span></Label>
+            <select
+              value={form.role}
+              onChange={e => set('role', e.target.value)}
+              className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+            >
+              {STAFF_ROLES.filter(r => !(callerRole === 'MANAGER' && r === 'MANAGER')).map(r => (
+                <option key={r} value={r}>{r.charAt(0) + r.slice(1).toLowerCase()}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Password */}
+          <div className="space-y-1">
+            <Label>Password <span className="text-red-500">*</span></Label>
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={e => set('password', e.target.value)}
+                placeholder="Min. 6 characters"
+                className="pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+            {errors.password && <p className="text-xs text-red-500">{errors.password}</p>}
+          </div>
+
+          {/* Login credentials — at least one required */}
+          <div className="space-y-2 rounded-lg border border-dashed border-gray-200 p-3 bg-gray-50">
+            <p className="text-xs font-medium text-gray-600">
+              Login credentials <span className="text-red-500">*</span>
+              <span className="font-normal text-gray-400 ml-1">— provide at least one</span>
+            </p>
+
+            {/* Email */}
+            <div className="space-y-1">
+              <Label className="text-xs">Email</Label>
+              <Input
+                type="text"
+                inputMode="email"
+                value={form.email}
+                onChange={e => set('email', e.target.value)}
+                placeholder="john@restaurant.com"
+                className={errors.email ? 'border-red-400 focus:ring-red-300' : ''}
+              />
+              {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+            </div>
+
+            {/* Phone */}
+            <div className="space-y-1">
+              <Label className="text-xs">Phone</Label>
+              <div className="flex">
+                <select
+                  value={form.dialCode}
+                  onChange={e => set('dialCode', e.target.value)}
+                  className="border border-input border-r-0 rounded-l-md px-2 py-2 text-sm bg-background text-gray-700 focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {DIAL_CODES.map(d => (
+                    <option key={d.code} value={d.dial}>
+                      {d.flag} {d.dial}
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={form.phoneNumber}
+                  onChange={e => onPhoneInput(e.target.value)}
+                  placeholder="1700000000"
+                  className={`rounded-l-none ${errors.phone ? 'border-red-400 focus:ring-red-300' : ''}`}
+                />
+              </div>
+              {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
+            </div>
+
+            {errors.login && <p className="text-xs text-red-500">{errors.login}</p>}
+          </div>
+
+        </div>
+        <DialogFooter>
+          <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+          <Button onClick={handleSubmit} disabled={mut.isPending}>
+            {mut.isPending ? 'Adding…' : 'Add Staff'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Reset Password Dialog ────────────────────────────────────────────────────
+
+function ResetPasswordDialog({
+  employee,
+  restaurantId,
+  onClose,
+}: {
+  employee: Employee
+  restaurantId: string
+  onClose: () => void
+}) {
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm]   = useState('')
+  const [showPw, setShowPw]     = useState(false)
+  const [showCf, setShowCf]     = useState(false)
+  const [error, setError]       = useState('')
+
+  const mut = useMutation({
+    mutationFn: () =>
+      api.patch(`/users/staff/${employee.id}`, { password }),
+    onSuccess: () => {
+      toast.success(`Password reset for ${employee.firstName} ${employee.lastName}`)
+      onClose()
+    },
+    onError: (e) => toast.error(apiError(e)),
+  })
+
+  function handleSubmit() {
+    if (password.length < 6) { setError('Minimum 6 characters'); return }
+    if (password !== confirm) { setError('Passwords do not match'); return }
+    setError('')
+    mut.mutate()
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Reset Password</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-gray-500">
+          Set a new password for <span className="font-medium text-gray-800">{employee.firstName} {employee.lastName}</span>.
+          They will use it on their next login.
+        </p>
+        <div className="space-y-3 py-1">
+          <div className="space-y-1">
+            <Label>New password</Label>
+            <div className="relative">
+              <Input
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError('') }}
+                placeholder="Min. 6 characters"
+                className="pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw(v => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                tabIndex={-1}
+              >
+                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Confirm password</Label>
+            <div className="relative">
+              <Input
+                type={showCf ? 'text' : 'password'}
+                value={confirm}
+                onChange={e => { setConfirm(e.target.value); setError('') }}
+                placeholder="Re-enter password"
+                className="pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCf(v => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                tabIndex={-1}
+              >
+                {showCf ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+        <DialogFooter>
+          <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+          <Button onClick={handleSubmit} disabled={mut.isPending}>
+            {mut.isPending ? 'Saving…' : 'Reset Password'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Employees Tab ────────────────────────────────────────────────────────────
 
-function EmployeesTab({ restaurantId }: { restaurantId: string }) {
-  const [editEmployee, setEditEmployee] = useState<Employee | null>(null)
+function EmployeesTab({ restaurantId, callerRole }: { restaurantId: string; callerRole: string }) {
+  const [editEmployee, setEditEmployee]       = useState<Employee | null>(null)
+  const [resetEmployee, setResetEmployee]     = useState<Employee | null>(null)
+  const [addOpen, setAddOpen]                 = useState(false)
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ['hr-employees', restaurantId],
@@ -239,10 +605,21 @@ function EmployeesTab({ restaurantId }: { restaurantId: string }) {
     enabled: !!restaurantId,
   })
 
+  const canManage = callerRole === 'OWNER' || callerRole === 'MANAGER'
+
   if (isLoading) return <div className="p-6 text-sm text-gray-400">Loading…</div>
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">{(employees as Employee[]).length} staff member{(employees as Employee[]).length !== 1 ? 's' : ''}</p>
+        {canManage && (
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus size={14} /> Add Staff
+          </Button>
+        )}
+      </div>
+
       <div className="rounded-lg border bg-white overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
@@ -279,7 +656,12 @@ function EmployeesTab({ restaurantId }: { restaurantId: string }) {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <button onClick={() => setEditEmployee(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500">
+                  {canManage && !(callerRole === 'MANAGER' && (emp.role === 'OWNER' || emp.role === 'MANAGER')) && (
+                    <button onClick={() => setResetEmployee(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="Reset password">
+                      <KeyRound size={14} />
+                    </button>
+                  )}
+                  <button onClick={() => setEditEmployee(emp)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="Edit HR profile">
                     <Pencil size={14} />
                   </button>
                 </td>
@@ -298,6 +680,16 @@ function EmployeesTab({ restaurantId }: { restaurantId: string }) {
           employee={editEmployee}
           open={!!editEmployee}
           onClose={() => setEditEmployee(null)}
+        />
+      )}
+
+      <AddStaffDialog open={addOpen} onClose={() => setAddOpen(false)} callerRole={callerRole} />
+
+      {resetEmployee && (
+        <ResetPasswordDialog
+          employee={resetEmployee}
+          restaurantId={restaurantId}
+          onClose={() => setResetEmployee(null)}
         />
       )}
     </div>
@@ -1367,7 +1759,7 @@ export default function StaffPage() {
         })}
       </div>
 
-      {activeTab === 'employees' && <EmployeesTab restaurantId={restaurantId} />}
+      {activeTab === 'employees' && <EmployeesTab restaurantId={restaurantId} callerRole={user?.role ?? ''} />}
       {activeTab === 'schedule'  && <ScheduleTab restaurantId={restaurantId} />}
       {activeTab === 'time'      && <TimeTab restaurantId={restaurantId} currentUserId={user?.id ?? ''} />}
       {activeTab === 'tips'      && <TipsTab restaurantId={restaurantId} />}

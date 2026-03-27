@@ -90,12 +90,6 @@ export class OrdersService {
     return order;
   }
 
-  private async generateOrderNumber(restaurantId: string): Promise<string> {
-    const key = `order:seq:${restaurantId}`;
-    const num = await this.redis.incr(key);
-    return `ORD-${String(num).padStart(5, '0')}`;
-  }
-
   private validateStatusTransition(current: OrderStatus, next: OrderStatus) {
     const allowed = ALLOWED_TRANSITIONS[current] ?? [];
     if (!allowed.includes(next)) {
@@ -139,10 +133,11 @@ export class OrdersService {
 
     // Fetch + validate menu items
     const itemIds = dto.items.map((i) => i.itemId);
+    const uniqueItemIds = [...new Set(itemIds)];
     const menuItems = await this.prisma.item.findMany({
-      where: { id: { in: itemIds }, tenantId, restaurantId, isAvailable: true },
+      where: { id: { in: uniqueItemIds }, tenantId, restaurantId, isAvailable: true },
     });
-    if (menuItems.length !== itemIds.length) {
+    if (menuItems.length !== uniqueItemIds.length) {
       throw new NotFoundException('One or more items not found or not available in this restaurant');
     }
     const menuItemMap = new Map(menuItems.map((m) => [m.id, m]));
@@ -201,9 +196,26 @@ export class OrdersService {
     const shouldAutoAccept = autoKey ? autoAccept[autoKey] === true : false;
     const initialStatus = shouldAutoAccept ? OrderStatus.ACCEPTED : OrderStatus.PENDING;
 
-    const orderNumber = await this.generateOrderNumber(restaurantId);
+    let orderNumber = '';
 
+    // pg_advisory_xact_lock serializes order-number generation per restaurant.
+    // The lock is scoped to the transaction and released automatically on commit/rollback.
+    // hashtext() maps the restaurant UUID string to a stable 32-bit int.
     const order = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${restaurantId}))`;
+
+      const lastOrder = await tx.order.findFirst({
+        where: { restaurantId },
+        orderBy: { createdAt: 'desc' },
+        select: { orderNumber: true },
+      });
+      let seq = 1;
+      if (lastOrder?.orderNumber) {
+        const m = lastOrder.orderNumber.match(/(\d+)$/);
+        if (m) seq = parseInt(m[1], 10) + 1;
+      }
+      orderNumber = `ORD-${String(seq).padStart(5, '0')}`;
+
       return tx.order.create({
         data: {
           tenantId,
@@ -261,6 +273,8 @@ export class OrdersService {
       orderNumber: order.orderNumber,
       restaurantId,
       channel,
+      tableId: dto.tableId ?? null,
+      tableNumber: (order.table as any)?.tableNumber ?? null,
       items: order.items.map((i) => ({ name: i.name, quantity: i.quantity })),
       totalAmount: Number(order.totalAmount),
       currency: order.currency,
@@ -275,7 +289,15 @@ export class OrdersService {
         type: NotificationType.NEW_ORDER,
         title: `New order #${orderNumber}`,
         body: `${channel} — ${order.items.length} item(s) — ${order.currency} ${Number(order.totalAmount).toFixed(2)}`,
-        data: { orderId: order.id, orderNumber, channel, totalAmount: Number(order.totalAmount) },
+        data: {
+          orderId: order.id,
+          orderNumber,
+          channel,
+          totalAmount: Number(order.totalAmount),
+          currency: order.currency,
+          tableNumber: (order.table as any)?.tableNumber ?? null,
+          items: order.items.map((i) => ({ name: i.name, quantity: i.quantity })),
+        },
         targetRoles: [UserRole.KITCHEN, UserRole.MANAGER, UserRole.OWNER],
       })
       .catch((err) => this.logger.error(`Notification error: ${err.message}`));
@@ -654,10 +676,11 @@ export class OrdersService {
 
     // Validate items
     const itemIds = dto.items.map((i) => i.itemId);
+    const uniqueItemIds = [...new Set(itemIds)];
     const menuItems = await this.prisma.item.findMany({
-      where: { id: { in: itemIds }, tenantId, restaurantId, isAvailable: true },
+      where: { id: { in: uniqueItemIds }, tenantId, restaurantId, isAvailable: true },
     });
-    if (menuItems.length !== itemIds.length) {
+    if (menuItems.length !== uniqueItemIds.length) {
       throw new NotFoundException('One or more items not found or not available');
     }
     const menuItemMap = new Map(menuItems.map((m) => [m.id, m]));

@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "RestroCloud",
+    "slug": "restrocloud-customer",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "restrocloud-customer",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FF6B35"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.restrocloud.customer"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FF6B35",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.restrocloud.customer",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#FF6B35",
+          "sounds": []
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "http://localhost:3000/api",
+      "restaurantSlug": "spicegarden",
+      "brandName": "Spice Garden",
+      "brandColor": "#FF6B35",
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
+    }
+  }
+}

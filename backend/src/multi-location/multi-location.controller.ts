@@ -14,7 +14,9 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { PlanGuard } from '../common/guards/plan.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RequireFeature } from '../common/decorators/plan-feature.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '@prisma/client';
 import { MultiLocationService } from './multi-location.service';
@@ -25,7 +27,8 @@ import { ConsolidatedQueryDto } from './dto/consolidated-query.dto';
 
 @ApiTags('Multi-Location')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, RolesGuard, PlanGuard)
+@RequireFeature('multiLocation')
 @Roles(UserRole.OWNER)
 @Controller('tenant')
 export class MultiLocationController {
