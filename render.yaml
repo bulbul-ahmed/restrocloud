@@ -60,7 +60,6 @@ services:
   - type: web
     name: restrocloud-dashboard
     runtime: static
-    region: oregon
     rootDir: frontend-dashboard
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
@@ -72,7 +71,6 @@ services:
   - type: web
     name: restrocloud-superadmin
     runtime: static
-    region: oregon
     rootDir: frontend-superadmin
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
