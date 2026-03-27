@@ -5,6 +5,7 @@ dist/
 .env.*.local
 backend/backend.env
 backend/uploads/
+frontend-ordering/.next/
 
 # Logs
 *.log
